@@ -1,0 +1,216 @@
+const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Animation Budgeting Advisor</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      color: #333;
+    }
+    h1 {
+      font-size: 1.2rem;
+      margin-bottom: 15px;
+      color: #1a1a1a;
+    }
+    #controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #startBtn {
+      background: #4CAF50;
+      color: white;
+    }
+    #startBtn:hover { background: #43A047; }
+    #startBtn:disabled { background: #aaa; cursor: not-allowed; }
+    #stopBtn {
+      background: #f44336;
+      color: white;
+    }
+    #stopBtn:hover { background: #e53935; }
+    #stopBtn:disabled { background: #aaa; cursor: not-allowed; }
+    #downloadBtn {
+      background: #2196F3;
+      color: white;
+      display: none;
+    }
+    #downloadBtn:hover { background: #1E88E5; }
+    #status {
+      margin-bottom: 15px;
+      font-size: 0.9rem;
+      color: #666;
+    }
+    #status .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+    .dot-idle { background: #aaa; }
+    .dot-connecting { background: #FFC107; }
+    .dot-connected { background: #4CAF50; }
+    .dot-ended { background: #f44336; }
+    #transcript-box {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-bottom: 15px;
+      min-height: 100px;
+    }
+    #transcript-box p {
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+    .role-ai { color: #1565C0; }
+    .role-user { color: #2E7D32; }
+    #transcript-box .empty {
+      color: #aaa;
+      font-style: italic;
+    }
+    #summary-box {
+      background: #E3F2FD;
+      border: 1px solid #BBDEFB;
+      border-radius: 8px;
+      padding: 15px;
+      display: none;
+    }
+    #summary-box h3 {
+      font-size: 1rem;
+      margin-bottom: 8px;
+      color: #1565C0;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎬 Animation Budgeting Advisor</h1>
+
+  <div id="status">
+    <span class="dot dot-idle"></span> Ready to start
+  </div>
+
+  <div id="controls">
+    <button id="startBtn" onclick="startCall()">Start Call</button>
+    <button id="stopBtn" onclick="stopCall()" disabled>End Call</button>
+    <button id="downloadBtn" onclick="downloadTranscript()">📥 Download Summary</button>
+  </div>
+
+  <div id="transcript-box">
+    <p class="empty">Transcript will appear here once the call starts...</p>
+  </div>
+
+  <div id="summary-box">
+    <h3>📋 Call Summary</h3>
+    <p id="summary-text"></p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/gh/VapiAI/html-script-tag@latest/dist/assets/index.js" defer async></script>
+  <script>
+    let vapi;
+    let transcriptLines = [];
+    let callSummary = '';
+    let callId = '';
+
+    const VAPI_PUBLIC_KEY = 'YOUR_PUBLIC_KEY'; // <-- Replace with your pk- key
+    const ASSISTANT_ID = '65412f7d-5d9b-408d-87f7-bbafc3674082';
+
+    function setStatus(text, dotClass) {
+      document.getElementById('status').innerHTML =
+        '<span class="dot ' + dotClass + '"></span> ' + text;
+    }
+
+    function startCall() {
+      if (!window.vapiSDK) {
+        alert('SDK still loading, please wait a moment.');
+        return;
+      }
+
+      vapi = window.vapiSDK.run({
+        apiKey: VAPI_PUBLIC_KEY,
+        assistant: ASSISTANT_ID,
+        config: { position: 'bottom-right', idle: { enabled: false } }
+      });
+
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('stopBtn').disabled = false;
+      document.getElementById('downloadBtn').style.display = 'none';
+      document.getElementById('summary-box').style.display = 'none';
+      document.getElementById('transcript-box').innerHTML = '';
+      transcriptLines = [];
+      callSummary = '';
+      setStatus('Connecting...', 'dot-connecting');
+
+      vapi.on('call-start', function() {
+        setStatus('Connected — speak now', 'dot-connected');
+      });
+
+      vapi.on('message', function(msg) {
+        if (msg.type === 'transcript' && msg.transcriptType === 'final') {
+          var role = msg.role === 'assistant' ? 'AI' : 'You';
+          var cls = msg.role === 'assistant' ? 'role-ai' : 'role-user';
+          transcriptLines.push({ role: role, text: msg.transcript });
+          var box = document.getElementById('transcript-box');
+          var p = document.createElement('p');
+          p.className = cls;
+          p.innerHTML = '<strong>' + role + ':</strong> ' + msg.transcript;
+          box.appendChild(p);
+          box.scrollTop = box.scrollHeight;
+        }
+      });
+
+      vapi.on('call-end', function() {
+        setStatus('Call ended', 'dot-ended');
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        document.getElementById('downloadBtn').style.display = 'inline-block';
+      });
+
+      vapi.on('error', function(e) {
+        console.error('Vapi error:', e);
+        setStatus('Error — check console', 'dot-ended');
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+      });
+    }
+
+    function stopCall() {
+      if (vapi) vapi.stop();
+    }
+
+    function downloadTranscript() {
+      var content = '=== Animation Budgeting Advisor — Call Transcript ===\\n\\n';
+      transcriptLines.forEach(function(line) {
+        content += line.role + ': ' + line.text + '\\n\\n';
+      });
+      content += '\\n=== End of Transcript ===\\n';
+
+      var blob = new Blob([content], { type: 'text/plain' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'call-transcript-' + new Date().toISOString().slice(0,10) + '.txt';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>`;
+
+return html;
