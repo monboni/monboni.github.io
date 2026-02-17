@@ -12,42 +12,10 @@
       padding: 20px;
       color: #333;
     }
-    h1 {
-      font-size: 1.2rem;
+    h1 1.2rem;
       margin-bottom: 15px;
       color: #1a1a1a;
     }
-    #controls {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    button {
-      padding: 10px 24px;
-      border: none;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    #startBtn {
-      background: #4CAF50;
-      color: white;
-    }
-    #startBtn:hover { background: #43A047; }
-    #startBtn:disabled { background: #aaa; cursor: not-allowed; }
-    #stopBtn {
-      background: #f44336;
-      color: white;
-    }
-    #stopBtn:hover { background: #e53935; }
-    #stopBtn:disabled { background: #aaa; cursor: not-allowed; }
-    #downloadBtn {
-      background: #2196F3;
-      color: white;
-      display: none;
-    }
-    #downloadBtn:hover { background: #1E88E5; }
     #status {
       margin-bottom: 15px;
       font-size: 0.9rem;
@@ -65,6 +33,24 @@
     .dot-connecting { background: #FFC107; }
     .dot-connected { background: #4CAF50; }
     .dot-ended { background: #f44336; }
+    #controls {
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-right: 10px;
+    }
+    #downloadPdf {
+      background: #2196F3;
+      color: white;
+      display: none;
+    }
+    #downloadPdf:hover { background: #1E88E5; }
     #transcript-box {
       background: white;
       border: 1px solid #ddd;
@@ -76,26 +62,23 @@
       min-height: 100px;
     }
     #transcript-box p {
-      margin-bottom: 8px;
-      line-height: 1.5;
+      margin-bottom: 10px;
+      line-height: 1.6;
+      padding: 6px 10px;
+      border-radius: 6px;
     }
-    .role-ai { color: #1565C0; }
-    .role-user { color: #2E7D32; }
+    .role-ai {
+      color: #1565C0;
+      background: #E3F2FD;
+    }
+    .role-user {
+      color: #2E7D32;
+      background: #E8F5E9;
+    }
     #transcript-box .empty {
       color: #aaa;
       font-style: italic;
-    }
-    #summary-box {
-      background: #E3F2FD;
-      border: 1px solid #BBDEFB;
-      border-radius: 8px;
-      padding: 15px;
-      display: none;
-    }
-    #summary-box h3 {
-      font-size: 1rem;
-      margin-bottom: 8px;
-      color: #1565C0;
+      background: none;
     }
   </style>
 </head>
@@ -103,30 +86,21 @@
   <h1>🎬 Animation Budgeting Advisor</h1>
 
   <div id="status">
-    <span class="dot dot-idle"></span> Ready to start
+    <span class="dot dot-idle"></span> Click the phone icon in the bottom-right to start
   </div>
 
   <div id="controls">
-    <button id="startBtn" onclick="startCall()">Start Call</button>
-    <button id="stopBtn" onclick="stopCall()" disabled>End Call</button>
-    <button id="downloadBtn" onclick="downloadTranscript()">📥 Download Summary</button>
+    <button id="downloadPdf" onclick="downloadPDF()">📥 Download Transcript (PDF)</button>
   </div>
 
   <div id="transcript-box">
     <p class="empty">Transcript will appear here once the call starts...</p>
   </div>
 
-  <div id="summary-box">
-    <h3>📋 Call Summary</h3>
-    <p id="summary-text"></p>
-  </div>
-
   <script src="https://cdn.jsdelivr.net/gh/VapiAI/html-script-tag@latest/dist/assets/index.js" defer async></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script>
-    let vapi;
-    let transcriptLines = [];
-    let callSummary = '';
-    let callId = '';
+    var transcriptLines = [];
 
     const VAPI_PUBLIC_KEY = 'fe7a575d-3cdd-4242-8f65-c24e6f1a89d3'; // <-- Replace with your pk- key
     const ASSISTANT_ID = '65412f7d-5d9b-408d-87f7-bbafc3674082';
@@ -136,34 +110,34 @@
         '<span class="dot ' + dotClass + '"></span> ' + text;
     }
 
-    function startCall() {
-      if (!window.vapiSDK) {
-        alert('SDK still loading, please wait a moment.');
-        return;
-      }
+    window.addEventListener('load', function() {
+      var checkSDK = setInterval(function() {
+        if (window.vapiSDK) {
+          clearInterval(checkSDK);
+          initVapi();
+        }
+      }, 500);
+    });
 
-      vapi = window.vapiSDK.run({
+    function initVapi() {
+      var vapi = window.vapiSDK.run({
         apiKey: VAPI_PUBLIC_KEY,
         assistant: ASSISTANT_ID,
-        config: { position: 'bottom-right', idle: { enabled: false } }
+        config: {
+          position: 'bottom-right'
+        }
       });
-
-      document.getElementById('startBtn').disabled = true;
-      document.getElementById('stopBtn').disabled = false;
-      document.getElementById('downloadBtn').style.display = 'none';
-      document.getElementById('summary-box').style.display = 'none';
-      document.getElementById('transcript-box').innerHTML = '';
-      transcriptLines = [];
-      callSummary = '';
-      setStatus('Connecting...', 'dot-connecting');
 
       vapi.on('call-start', function() {
         setStatus('Connected — speak now', 'dot-connected');
+        document.getElementById('downloadPdf').style.display = 'none';
+        document.getElementById('transcript-box').innerHTML = '';
+        transcriptLines = [];
       });
 
       vapi.on('message', function(msg) {
         if (msg.type === 'transcript' && msg.transcriptType === 'final') {
-          var role = msg.role === 'assistant' ? 'AI' : 'You';
+          var role = msg.role === 'assistant' ? 'Advisor' : 'You';
           var cls = msg.role === 'assistant' ? 'role-ai' : 'role-user';
           transcriptLines.push({ role: role, text: msg.transcript });
           var box = document.getElementById('transcript-box');
@@ -176,38 +150,83 @@
       });
 
       vapi.on('call-end', function() {
-        setStatus('Call ended', 'dot-ended');
-        document.getElementById('startBtn').disabled = false;
-        document.getElementById('stopBtn').disabled = true;
-        document.getElementById('downloadBtn').style.display = 'inline-block';
+        setStatus('Call ended — download your transcript below', 'dot-ended');
+        document.getElementById('downloadPdf').style.display = 'inline-block';
       });
 
       vapi.on('error', function(e) {
         console.error('Vapi error:', e);
-        setStatus('Error — check console', 'dot-ended');
-        document.getElementById('startBtn').disabled = false;
-        document.getElementById('stopBtn').disabled = true;
       });
     }
 
-    function stopCall() {
-      if (vapi) vapi.stop();
-    }
+    function downloadPDF() {
+      var jsPDF = window.jspdf.jsPDF;
+      var doc = new jsPDF();
+      var pageWidth = doc.internal.pageSize.getWidth();
+      var margin = 20;
+      var maxWidth = pageWidth - margin * 2;
+      var y = 20;
 
-    function downloadTranscript() {
-      var content = '=== Animation Budgeting Advisor — Call Transcript ===\\n\\n';
+      doc.setFontSize(18);
+      doc.setTextColor(26, 26, 26);
+      doc.text('Animation Budgeting Advisor', margin, y);
+      y += 8;
+
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text('Call Date: ' + new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString(), margin, y);
+      y += 5;
+
+      doc.setDrawColor(200, 200, 200);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 10;
+
+      doc.setFontSize(11);
       transcriptLines.forEach(function(line) {
-        content += line.role + ': ' + line.text + '\\n\\n';
-      });
-      content += '\\n=== End of Transcript ===\\n';
+        if (line.role === 'Advisor') {
+          doc.setTextColor(21, 101, 192);
+        } else {
+          doc.setTextColor(46, 125, 50);
+        }
+        doc.setFont(undefined, 'bold');
+        var roleText = line.role + ':';
+        doc.text(roleText, margin, y);
 
-      var blob = new Blob([content], { type: 'text/plain' });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url;
-      a.download = 'call-transcript-' + new Date().toISOString().slice(0,10) + '.txt';
-      a.click();
-      URL.revokeObjectURL(url);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(51, 51, 51);
+        var textLines = doc.splitTextToSize(line.text, maxWidth - 5);
+        var roleWidth = doc.getTextWidth(roleText + ' ');
+
+        if (roleWidth + doc.getTextWidth(textLines[0]) < maxWidth) {
+          doc.text(textLines[0], margin + roleWidth, y);
+          y += 6;
+          for (var i = 1; i < textLines.length; i++) {
+            if (y > 275) { doc.addPage(); y = 20; }
+            doc.text(textLines[i], margin, y);
+            y += 6;
+          }
+        } else {
+          y += 6;
+          textLines.forEach(function(tl) {
+            if (y > 275) { doc.addPage(); y = 20; }
+            doc.text(tl, margin, y);
+            y += 6;
+          });
+        }
+        y += 4;
+
+        if (y > 275) { doc.addPage(); y = 20; }
+      });
+
+      y += 5;
+      doc.setDrawColor(200, 200, 200);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 8;
+      doc.setFontSize(9);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Generated by Animation Budgeting Advisor', margin, y);
+
+      doc.save('call-transcript-' + new Date().toISOString().slice(0, 10) + '.pdf');
     }
   </script>
 </body>
