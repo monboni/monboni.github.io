@@ -1,2 +1,21 @@
 # monboni.github.io
-Animation Assistant VAPI widget
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Animation Budgeting Assistant</title>
+</head>
+<body>
+    <!-- Your website content -->
+    
+    <!-- Add Vapi Widget -->
+    <script src="https://unpkg.com/@vapi-ai/client-sdk-react/dist/embed/widget.umd.js" async type="text/javascript"></script>
+    
+    <vapi-widget
+      public-key="fe7a575d-3cdd-4242-8f65-c24e6f1a89d3"
+     assistant-id="65412f7d-5d9b-408d-87f7-bbafc3674082"
+     mode="voice"
+     theme="light"
+     display-name="Animation Advisor"
+    ></vapi-widget>
+</body>
+</html>
